@@ -37,6 +37,7 @@ Credits
 Contributors
 ------------
 * `nehemiascr <https://github.com/nehemiascr>`
+* `drinktea0808 <https://github.com/drinktea0808>`
 
 Sponsors
 --------
