@@ -223,12 +223,8 @@ class Configuration(models.Model):
 
     @api.onchange('backup_type')
     def onchange_backup_type(self):
-        self.set_show_s3()
-        self.set_show_sftp()
-        self.set_show_owncloud()
-        self.set_show_dropbox()
-        self.set_show_backblaze()
-
+        for cloud_service in [e.value[0] for e in BackupTypes]:
+            exec('self.set_show_{}()'.format(cloud_service))
         self.set_show_access_key()
         self.set_show_secret_key()
         self.set_show_login_cred()
@@ -311,17 +307,7 @@ class Configuration(models.Model):
         self.ensure_one()
         try:
             # Check typ of backup
-            if self.backup_type == BackupTypes.s3.value[0]:
-                self._backup_on_s3()
-            elif self.backup_type == BackupTypes.dropbox.value[0]:
-                self._backup_on_dropbox()
-            elif self.backup_type == BackupTypes.owncloud.value[0]:
-                self._backup_on_owncloud()
-            elif self.backup_type == BackupTypes.sftp.value[0]:
-                self._backup_on_sftp()
-            elif self.backup_type == BackupTypes.backblaze.value[0]:
-                self._backup_to_backblaze()
-            # Add here another "if condition" when you would like to implement another backup type
+            exec('self._backup_on_{}()'.format(self.backup_type))
             self.send_email()
         except requests_exceptions.ConnectionError:
             message = 'odoo Server has no connection to this service-provider!'
@@ -349,9 +335,7 @@ class Configuration(models.Model):
         except botocore.exceptions.ClientError as client_err:
             raise exceptions.ValidationError("AWS S3: " + client_err.response['Error']['Message'])
         else:
-            message = ("<p><b>AWS S3:</b> Upload successful!</p><p>You can find the backup under the bucket {0} with the path <b>{1}</b></p>".format(self.s3_bucket_name, path))
-            self.set_last_fields(message, path=path)
-            self.message_post(message)
+            self.send_and_set_message('AWS S3', path, bucket_name=self.s3_bucket_name)
 
     def _backup_on_dropbox(self):
         """
@@ -366,9 +350,7 @@ class Configuration(models.Model):
         except dropbox_exceptions.BadInputError:
             raise exceptions.ValidationError("Dropbox: Access Key is malformed!")
         else:
-            message = ("<p><b>Dropbox:</b> Upload successful!</p><p>You can find the backup under the name <b>{0}</b></p>".format(path))
-            self.set_last_fields(message, path=path)
-            self.message_post(message)
+            self.send_and_set_message('Dropbox', path)
 
     def _backup_on_owncloud(self):
         """
@@ -386,9 +368,8 @@ class Configuration(models.Model):
             if http_error.status_code == 404:
                 raise exceptions.ValidationError('ownCloud/nextCloud: Folder not found!')
             raise http_error
-        message = ("<p><b>ownCloud/nextCloud:</b> Upload successful!</p><p>You can find the backup under the name <b>{0}</b></p>".format(path))
-        self.set_last_fields(message, path=path)
-        self.message_post(message)
+        else:
+            self.send_and_set_message('ownCloud/nextCloud', path)
 
     def _backup_on_sftp(self):
         """
@@ -411,9 +392,7 @@ class Configuration(models.Model):
             except FileNotFoundError:
                 raise exceptions.ValidationError('SFTP: Folder not found.')
             else:
-                message = ("<p><b>SFTP:</b> Upload successful!</p><p>You can find the backup under the name <b>{0}</b></p>".format(path))
-                self.set_last_fields(message, path=path)
-                self.message_post(message)
+                self.send_and_set_message('SFTP', path)
 
     def _backup_to_backblaze(self):
         """
@@ -453,9 +432,7 @@ class Configuration(models.Model):
             raise exceptions.ValidationError('Backblaze: ' + req_upload_json['message'])
 
         # Message success
-        message = ("<p><b>Backblaze:</b> Upload successful!</p><p>You can find the backup under the bucket {0} with the name <b>{1}</b></p>".format(self.bucket_id, path))
-        self.set_last_fields(message, path=path)
-        self.message_post(message)
+        self.send_and_set_message('Backblaze', path, bucket_name=self.bucket_id)
 
     def get_path_and_content(self):
         """
@@ -480,3 +457,10 @@ class Configuration(models.Model):
         dump_stream = service.db.dump_db(dbname, None, backup_format)
         return filename, dump_stream
 
+    def send_and_set_message(self, service_name, path, bucket_name=None):
+        if bucket_name:
+            message = "<p><b>{}:</b> Upload successful!</p><p>You can find the backup under the bucket {} with the path <b>{}</b></p>".format(service_name, bucket_name, path)
+        else:
+            message = "<p><b>{}:</b> Upload successful!</p><p>You can find the backup under the path <b>{}</b></p>".format(service_name, path)
+        self.set_last_fields(message, path=path)
+        self.message_post(message)
