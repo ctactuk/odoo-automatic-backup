@@ -57,7 +57,7 @@ class Configuration(models.Model):
     # Same values as in automatic action
     # they will be transferred to the automatic-action after write and activation
     schedule_frequently = fields.Selection(string='Every', selection=[('days', 'Days'), ('weeks', 'Weeks')],
-                                           default='weeks', required=1)
+                                           default='days', required=1)
     schedule_number = fields.Integer('Schedule Number', min=1, default=1, required=1)
     next_backup_time = fields.Datetime('Next Backup Time', store=0, readonly=1, compute='_compute_next_backup_time')
 
